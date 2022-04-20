@@ -97,6 +97,7 @@ public:
     return &TSInfo;
   }
   bool enableMachineScheduler() const override { return true; }
+  //bool enablePostRAMachineScheduler() const override { return true; }
 
   Align getPrefFunctionAlignment() const { return PrefFunctionAlignment; }
   Align getPrefLoopAlignment() const { return PrefLoopAlignment; }
@@ -128,6 +129,7 @@ public:
            HasStdExtZvfbfwma;
   }
   bool is64Bit() const { return IsRV64; }
+  bool useLoadStorePairs() const;
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }
   unsigned getFLen() const {
