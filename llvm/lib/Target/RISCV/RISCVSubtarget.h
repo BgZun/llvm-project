@@ -130,6 +130,8 @@ public:
   }
   bool is64Bit() const { return IsRV64; }
   bool shouldRemoveBackToBackBranches() const;
+  bool shouldUseExt() const;
+  bool shouldUseIns() const;
   bool useLoadStorePairs() const;
   bool useCCMovInsn() const;
   MVT getXLenVT() const { return XLenVT; }
