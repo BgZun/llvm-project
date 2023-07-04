@@ -260,6 +260,8 @@
 #include "llvm/Transforms/Vectorize/LoopVectorize.h"
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
+#include "llvm/Transforms/Utils/DebugDelPass.h"
+#include "llvm/Transforms/Utils/BasicDebugInstCounter.h"
 #include "llvm/Transforms/Utils/MyHelloWorld.h"
 #include <optional>
 
