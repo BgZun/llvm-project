@@ -1077,6 +1077,10 @@ bool TargetPassConfig::addCoreISelPasses() {
   // Expand pseudo-instructions emitted by ISel. Don't run the verifier before
   // FinalizeISel.
   addPass(&FinalizeISelID);
+  
+  //Testing
+  addPass(&MyID);
+  addPass(&MyDELID);
 
   // Print the instruction selected machine code...
   printAndVerify("After Instruction Selection");

@@ -410,6 +410,10 @@ namespace llvm {
   /// This pass expands pseudo-instructions, reserves registers and adjusts
   /// machine frame information.
   extern char &FinalizeISelID;
+  
+  //Test
+  extern char &MyID;
+  extern char &MyDELID;
 
   /// UnpackMachineBundles - This pass unpack machine instruction bundles.
   extern char &UnpackMachineBundlesID;
