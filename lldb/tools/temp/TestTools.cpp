@@ -30,7 +30,7 @@ using namespace cl;
 static opt<std::string> TargetFileName("target-file", cl::Positional,
                                        cl::desc("<path to file>"),
                                        cl::Required);
-static opt<bool> Verbose ("verbose", cl::desc("Print output from lldb"));
+static opt<bool> Verbose("verbose", cl::desc("Print output from lldb"));
 
 } // namespace
 /// @}
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
 
   target.BreakpointCreateByName("main");
 
-  // Setup support vars for main loop  
+  // Setup support vars for main loop
   uint32_t last_proc_stop_id = 0;
   uint32_t cur_stop_id = 0;
   lldb::SBEvent event;
@@ -74,12 +74,12 @@ int main(int argc, char **argv) {
   str_out.RedirectToFileHandle(stdout, false);
   str_err.RedirectToFileHandle(stderr, false);
 
-  //Launch Process
+  // Launch Process
   lldb::SBLaunchInfo li = target.GetLaunchInfo();
   lldb::SBError err;
-  lldb::SBProcess proc = target.Launch(li,err);
-  
-  if(!proc.IsValid()){
+  lldb::SBProcess proc = target.Launch(li, err);
+
+  if (!proc.IsValid()) {
     str_out.Print(err.GetCString());
     return -1;
   }
@@ -106,11 +106,12 @@ int main(int argc, char **argv) {
       cur_stop_id = proc.GetStopID();
 
       // Check if this is a new stop
-      // If the cur and last stop ids match then that means that the user entered a command that did not restart 
-      // the process we do not need to write the source files again
-      // If the ids do not match that means that means that this is a new stop and that we need to print the source code 
-      if(cur_stop_id!=last_proc_stop_id){
-        last_proc_stop_id=cur_stop_id;
+      // If the cur and last stop ids match then that means that the user
+      // entered a command that did not restart the process we do not need to
+      // write the source files again If the ids do not match that means that
+      // means that this is a new stop and that we need to print the source code
+      if (cur_stop_id != last_proc_stop_id) {
+        last_proc_stop_id = cur_stop_id;
 
         str_out.Printf("Process %" PRIu64 " stopped\n", proc.GetProcessID());
 
@@ -131,15 +132,16 @@ int main(int argc, char **argv) {
         if (selected_frame.GetLineEntry().IsValid()) {
           // Print 3 lines of source code before and after the current line
           target.GetSourceManager().DisplaySourceLinesWithLineNumbersAndColumn(
-              sy_cx.GetLineEntry().GetFileSpec(), sy_cx.GetLineEntry().GetLine(),
-              sy_cx.GetLineEntry().GetColumn(), 3, 3, "->", str_out);
+              sy_cx.GetLineEntry().GetFileSpec(),
+              sy_cx.GetLineEntry().GetLine(), sy_cx.GetLineEntry().GetColumn(),
+              3, 3, "->", str_out);
         } else {
           // Switched to ASM
 
           // Print asm function
           // Print format similar to LLDB
           cout << selected_frame.GetModule().GetFileSpec().GetFilename() << "`"
-              << selected_frame.GetFunctionName() << ':' << endl;
+               << selected_frame.GetFunctionName() << ':' << endl;
 
           // Offset in the function
           //  cout<<" +
@@ -172,29 +174,33 @@ int main(int argc, char **argv) {
       getline(cin, buff);
 
       lldb::SBCommandReturnObject result;
-      debugger.GetCommandInterpreter().HandleCommand(buff.c_str(),result);
-      if(Verbose){
+      debugger.GetCommandInterpreter().HandleCommand(buff.c_str(), result);
+      if (Verbose) {
         str_out.Print(result.GetOutput());
         str_err.Print(result.GetError());
       }
 
-      // If the user inputed the quit command a promt will appear asking if the user wishes to kill the process
-      // Did the user choose to kill the process ?
-      if (result.GetStatus() == lldb::eReturnStatusQuit) {      
+      // If the user inputed the quit command a promt will appear asking if the
+      // user wishes to kill the process Did the user choose to kill the process
+      // ?
+      if (result.GetStatus() == lldb::eReturnStatusQuit) {
         break;
       }
-      
+
       // Check if we have quit with or without and exitcode
       if (debugger.GetCommandInterpreter().GetQuitStatus()) {
         break;
       }
     } else if (proc.GetState() == lldb::eStateExited) {
-      // If the process has exited print its status
-      int exit_status = proc.GetExitStatus();
-      const char *exit_desc = proc.GetExitDescription();
-      printf("Process %" PRIu64 " exited with status = %i (0x%8.8x) %s\n",
-             proc.GetProcessID(), exit_status, exit_status,
-             exit_desc ? exit_desc : "");
+      // Exit status will be printed beforehand if verbose is on
+      if (!Verbose) {
+        // If the process has exited print its status
+        int exit_status = proc.GetExitStatus();
+        const char *exit_desc = proc.GetExitDescription();
+        printf("Process %" PRIu64 " exited with status = %i (0x%8.8x) %s\n",
+               proc.GetProcessID(), exit_status, exit_status,
+               exit_desc ? exit_desc : "");
+      }
       break;
     }
   }
