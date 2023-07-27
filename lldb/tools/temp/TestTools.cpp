@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
   debugger.SetOutputFileHandle(stdout, false);
   debugger.SetInputFileHandle(stdin, true);
 
-  debugger.SetAsync(false);
+  // debugger.SetAsync(false);
   // Create a target from the provided exe file
   // Exit if the target isn't created
   lldb::SBTarget target = debugger.CreateTarget(TargetFileName.c_str());
@@ -95,10 +95,10 @@ int main(int argc, char **argv) {
     proc = target.GetProcess();
 
     // Handle events
-    // while (lis.GetNextEvent(event)) {
-    //   // debugger.HandleProcessEvent(proc, event, debugger.GetOutputFile(),
-    //   //                             debugger.GetErrorFile());
-    // }
+    while (lis.GetNextEvent(event)) {
+      // debugger.HandleProcessEvent(proc, event, debugger.GetOutputFile(),
+      //                             debugger.GetErrorFile());
+    }
     // Proc stopped
     if (proc.GetState() == lldb::eStateStopped) {
 
@@ -193,7 +193,7 @@ int main(int argc, char **argv) {
       }
     } else if (proc.GetState() == lldb::eStateExited) {
       // Exit status will be printed beforehand if verbose is on
-      if (!Verbose) {
+      if (!Verbose || debugger.GetAsync()) {
         // If the process has exited print its status
         int exit_status = proc.GetExitStatus();
         const char *exit_desc = proc.GetExitDescription();
