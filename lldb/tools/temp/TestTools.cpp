@@ -96,8 +96,8 @@ int main(int argc, char **argv) {
 
     // Handle events
     while (lis.GetNextEvent(event)) {
-      // debugger.HandleProcessEvent(proc, event, debugger.GetOutputFile(),
-      //                             debugger.GetErrorFile());
+      debugger.HandleProcessEvent(proc, event, debugger.GetOutputFile(),
+                                  debugger.GetErrorFile());
     }
     // Proc stopped
     if (proc.GetState() == lldb::eStateStopped) {
