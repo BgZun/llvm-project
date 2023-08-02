@@ -33,11 +33,88 @@ static opt<std::string> TargetFileName("target-file", cl::Positional,
                                        cl::Required);
 static opt<bool> Verbose("verbose", cl::desc("Print output from lldb"));
 
-static opt<bool> Async("async", cl::desc("Turn on debugger in async mode"));
+// static opt<bool> Async("async", cl::desc("Turn on debugger in async mode"));
 
 } // namespace
 /// @}
 //===----------------------------------------------------------------------===//
+
+void PrintSource(lldb::SBProcess proc, lldb::SBStream &str_out) {
+  uint32_t cur_stop_id = proc.GetStopID();
+  lldb::SBEvent ev = proc.GetStopEventForStopID(cur_stop_id);
+  lldb::SBTarget target = proc.GetTarget();
+
+  std::list<uint32_t> thread_idx;
+
+  lldb::SBThread cur_thread;
+  for (size_t i = 0; i < proc.GetNumThreads(); i++) {
+    // proc.GetSelectedThread() does not always get the thread that is
+    // stopped so we need to check that manualy It is also possible that
+    // multiple threads will stop at the same breakpoint at the same time
+    // The same behaviour is exhibited in lldb so we need to handle it
+    // here
+    lldb::SBThread test_thread = proc.GetThreadAtIndex(i);
+    if (test_thread.GetStopReason() != lldb::eStopReasonNone) {
+      thread_idx.push_back(i);
+    }
+  }
+
+  // Print the source code for every stopped thread
+  for (auto idx : thread_idx) {
+    // Get the thread and the selected frame
+    lldb::SBThread cur_thread = proc.GetThreadAtIndex(idx);
+    lldb::SBFrame selected_frame = cur_thread.GetSelectedFrame();
+
+    // Print the current thread and selected frame info
+    cur_thread.GetDescription(str_out);
+    selected_frame.GetDescription(str_out);
+
+    // Get the SymbolContext for source line printing
+    lldb::SBAddress addr = selected_frame.GetPCAddress();
+    lldb::SBSymbolContext sy_cx = target.ResolveSymbolContextForAddress(
+        addr, lldb::eSymbolContextEverything);
+
+    // Are we stil in the source file ?
+    if (selected_frame.GetLineEntry().IsValid()) {
+      // Print 3 lines of source code before and after the current line
+      target.GetSourceManager().DisplaySourceLinesWithLineNumbersAndColumn(
+          sy_cx.GetLineEntry().GetFileSpec(), sy_cx.GetLineEntry().GetLine(),
+          sy_cx.GetLineEntry().GetColumn(), 3, 3, "->", str_out);
+    } else {
+      // Switched to ASM
+
+      // Print asm function
+      // Print format similar to LLDB
+      cout << selected_frame.GetModule().GetFileSpec().GetFilename() << "`"
+           << selected_frame.GetFunctionName() << ':' << endl;
+
+      // Offset in the function
+      //  cout<<" +
+      //  "<<selected_frame.GetPCAddress().GetOffset()-selected_frame.GetModule().ResolveSymbolContextForAddress(selected_frame.GetPCAddress(),lldb::eSymbolContextEverything).GetSymbol().GetStartAddress().GetOffset();
+
+      // Get asm
+      string c = selected_frame.Disassemble();
+
+      // Find the current inst
+      size_t idx = c.find("->", 0);
+      // Include color
+      idx -= 5;
+
+      // Print next 4 lines
+      if (idx != string::npos) {
+        size_t lines = 4;
+        while (lines > 0 && idx < c.size()) {
+          cout << c.c_str()[idx];
+          if (c[idx] == '\n') {
+            lines--;
+          }
+          idx++;
+        }
+        cout << endl;
+      }
+    }
+  }
+}
 
 int main(int argc, char **argv) {
 
@@ -53,7 +130,9 @@ int main(int argc, char **argv) {
   debugger.SetOutputFileHandle(stdout, false);
   debugger.SetInputFileHandle(stdin, true);
 
-  debugger.SetAsync(Async);
+  // debugger.SetAsync(Async);
+
+  debugger.SetAsync(true);
   // Create a target from the provided exe file
   // Exit if the target isn't created
   lldb::SBTarget target = debugger.CreateTarget(TargetFileName.c_str());
@@ -70,7 +149,7 @@ int main(int argc, char **argv) {
   // Setup support vars for main loop
   uint32_t last_proc_stop_id = 0;
   uint32_t cur_stop_id = 0;
-  bool first = true;
+  // bool first = true;
   lldb::SBEvent event;
   lldb::SBStream str_out;
   lldb::SBStream str_err;
@@ -100,6 +179,7 @@ int main(int argc, char **argv) {
 
     // Handle events
     while (lis.GetNextEvent(event)) {
+      // This will print any process output
       debugger.HandleProcessEvent(proc, event, debugger.GetOutputFile(),
                                   debugger.GetErrorFile());
     }
@@ -114,90 +194,23 @@ int main(int argc, char **argv) {
       // entered a command that did not restart the process we do not need to
       // write the source files again If the ids do not match that means that
       // means that this is a new stop and that we need to print the source code
-      if ((cur_stop_id != last_proc_stop_id && Verbose &&
-           debugger.GetAsync()) ||
-          first) {
+      if (cur_stop_id != last_proc_stop_id) {
         last_proc_stop_id = cur_stop_id;
-        first = false;
 
         str_out.Printf("Process %" PRIu64 " stopped\n", proc.GetProcessID());
 
-        lldb::SBEvent ev = proc.GetStopEventForStopID(cur_stop_id);
-        ev.GetDescription(str_out);
-        cerr << endl << ev.IsValid() << endl;
+        // My print source
+        PrintSource(proc, str_out);
 
-        std::list<uint32_t> thread_idx;
-
-        lldb::SBThread cur_thread;
-        for (size_t i = 0; i < proc.GetNumThreads(); i++) {
-          // proc.GetSelectedThread() does not always get the thread that is
-          // stopped so we need to check that manualy It is also possible that
-          // multiple threads will stop at the same breakpoint at the same time
-          // The same behaviour is exhibited in lldb so we need to handle it
-          // here
-          lldb::SBThread test_thread = proc.GetThreadAtIndex(i);
-          if (test_thread.GetStopReason() != lldb::eStopReasonNone) {
-            thread_idx.push_back(i);
-          }
-        }
-
-        // Print the source code for every stopped thread
-        for (auto idx : thread_idx) {
-          // Get the thread and the selected frame
-          cur_thread = proc.GetThreadAtIndex(idx);
-          lldb::SBFrame selected_frame = cur_thread.GetSelectedFrame();
-
-          // Print the current thread and selected frame info
-          cur_thread.GetDescription(str_out);
-          selected_frame.GetDescription(str_out);
-
-          // Get the SymbolContext for source line printing
-          lldb::SBAddress addr = selected_frame.GetPCAddress();
-          lldb::SBSymbolContext sy_cx = target.ResolveSymbolContextForAddress(
-              addr, lldb::eSymbolContextEverything);
-
-          // Are we stil in the source file ?
-          if (selected_frame.GetLineEntry().IsValid()) {
-            // Print 3 lines of source code before and after the current line
-            target.GetSourceManager()
-                .DisplaySourceLinesWithLineNumbersAndColumn(
-                    sy_cx.GetLineEntry().GetFileSpec(),
-                    sy_cx.GetLineEntry().GetLine(),
-                    sy_cx.GetLineEntry().GetColumn(), 3, 3, "->", str_out);
-          } else {
-            // Switched to ASM
-
-            // Print asm function
-            // Print format similar to LLDB
-            cout << selected_frame.GetModule().GetFileSpec().GetFilename()
-                 << "`" << selected_frame.GetFunctionName() << ':' << endl;
-
-            // Offset in the function
-            //  cout<<" +
-            //  "<<selected_frame.GetPCAddress().GetOffset()-selected_frame.GetModule().ResolveSymbolContextForAddress(selected_frame.GetPCAddress(),lldb::eSymbolContextEverything).GetSymbol().GetStartAddress().GetOffset();
-
-            // Get asm
-            string c = selected_frame.Disassemble();
-
-            // Find the current inst
-            size_t idx = c.find("->", 0);
-            // Include color
-            idx -= 5;
-
-            // Print next 4 lines
-            if (idx != string::npos) {
-              size_t lines = 4;
-              while (lines > 0 && idx < c.size()) {
-                cout << c.c_str()[idx];
-                if (c[idx] == '\n') {
-                  lines--;
-                }
-                idx++;
-              }
-              cout << endl;
-            }
-          }
-        }
+        // Print source using lldb in sync mode
+        // lldb::SBCommandReturnObject result;
+        // bool old_async = debugger.GetAsync();
+        // debugger.SetAsync(false);
+        // string cmd = "process status";
+        // debugger.GetCommandInterpreter().HandleCommand(cmd.c_str(),result);
+        // str_out.Print(result.GetOutput());
+        // str_err.Print(result.GetError());
+        // debugger.SetAsync(old_async);
       }
       // Handle new command
       string buff;
@@ -221,15 +234,12 @@ int main(int argc, char **argv) {
         break;
       }
     } else if (proc.GetState() == lldb::eStateExited) {
-      // Exit status will be printed beforehand if verbose is on
-      if (!Verbose || debugger.GetAsync()) {
-        // If the process has exited print its status
-        int exit_status = proc.GetExitStatus();
-        const char *exit_desc = proc.GetExitDescription();
-        printf("Process %" PRIu64 " exited with status = %i (0x%8.8x) %s\n",
-               proc.GetProcessID(), exit_status, exit_status,
-               exit_desc ? exit_desc : "");
-      }
+      // If the process has exited print its status
+      int exit_status = proc.GetExitStatus();
+      const char *exit_desc = proc.GetExitDescription();
+      printf("Process %" PRIu64 " exited with status = %i (0x%8.8x) %s\n",
+             proc.GetProcessID(), exit_status, exit_status,
+             exit_desc ? exit_desc : "");
       break;
     }
   }
