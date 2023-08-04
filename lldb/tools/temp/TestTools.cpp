@@ -33,7 +33,7 @@ static opt<std::string> TargetFileName("target-file", cl::Positional,
                                        cl::Required);
 static opt<bool> Verbose("verbose", cl::desc("Print output from lldb"));
 
-// static opt<bool> Async("async", cl::desc("Turn on debugger in async mode"));
+static opt<bool> Async("async", cl::desc("Turn on debugger in async mode"));
 
 } // namespace
 /// @}
@@ -130,9 +130,8 @@ int main(int argc, char **argv) {
   debugger.SetOutputFileHandle(stdout, false);
   debugger.SetInputFileHandle(stdin, true);
 
-  // debugger.SetAsync(Async);
+  debugger.SetAsync(Async);
 
-  debugger.SetAsync(true);
   // Create a target from the provided exe file
   // Exit if the target isn't created
   lldb::SBTarget target = debugger.CreateTarget(TargetFileName.c_str());
@@ -149,7 +148,7 @@ int main(int argc, char **argv) {
   // Setup support vars for main loop
   uint32_t last_proc_stop_id = 0;
   uint32_t cur_stop_id = 0;
-  // bool first = true;
+  bool first = true;
   lldb::SBEvent event;
   lldb::SBStream str_out;
   lldb::SBStream str_err;
@@ -194,8 +193,10 @@ int main(int argc, char **argv) {
       // entered a command that did not restart the process we do not need to
       // write the source files again If the ids do not match that means that
       // means that this is a new stop and that we need to print the source code
-      if (cur_stop_id != last_proc_stop_id) {
+      if ((cur_stop_id != last_proc_stop_id && ((!Verbose &&
+          !debugger.GetAsync()) || debugger.GetAsync())) || first) {
         last_proc_stop_id = cur_stop_id;
+        first=false;
 
         str_out.Printf("Process %" PRIu64 " stopped\n", proc.GetProcessID());
 
@@ -234,12 +235,15 @@ int main(int argc, char **argv) {
         break;
       }
     } else if (proc.GetState() == lldb::eStateExited) {
-      // If the process has exited print its status
-      int exit_status = proc.GetExitStatus();
-      const char *exit_desc = proc.GetExitDescription();
-      printf("Process %" PRIu64 " exited with status = %i (0x%8.8x) %s\n",
-             proc.GetProcessID(), exit_status, exit_status,
-             exit_desc ? exit_desc : "");
+      // Exit status will be printed beforehand if verbose is on
+      if (!Verbose || debugger.GetAsync()) {
+        // If the process has exited print its status
+        int exit_status = proc.GetExitStatus();
+        const char *exit_desc = proc.GetExitDescription();
+        printf("Process %" PRIu64 " exited with status = %i (0x%8.8x) %s\n",
+               proc.GetProcessID(), exit_status, exit_status,
+               exit_desc ? exit_desc : "");
+      }
       break;
     }
   }
