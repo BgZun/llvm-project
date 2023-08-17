@@ -10,7 +10,7 @@ add_subdirectory(lldb-fuzzer EXCLUDE_FROM_ALL)
 
 add_lldb_tool_subdirectory(lldb-instr)
 add_lldb_tool_subdirectory(lldb-vscode)
-add_lldb_tool_subdirectory(temp)
+add_lldb_tool_subdirectory(lldb-analyze)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
   add_lldb_tool_subdirectory(darwin-debug)

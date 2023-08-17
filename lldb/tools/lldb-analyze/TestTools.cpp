@@ -4,6 +4,8 @@ using namespace std;
 
 #include "llvm/Support/CommandLine.h"
 
+#include "ABSDebugger.h"
+#include "ABSTarget.h"
 #include "lldb/API/SBCommandInterpreter.h"
 #include "lldb/API/SBCommandReturnObject.h"
 #include "lldb/API/SBDebugger.h"
@@ -18,9 +20,12 @@ using namespace std;
 #include "lldb/API/SBStream.h"
 #include "lldb/API/SBTarget.h"
 #include "lldb/API/SBThread.h"
+#include "lldb/Utility/ConstString.h"
 #include <list>
 
 using namespace llvm;
+using namespace lldb;
+using namespace lldb_analyze;
 
 /// @}
 /// Command line options.
@@ -85,12 +90,8 @@ void PrintSource(lldb::SBProcess proc, lldb::SBStream &str_out) {
 
       // Print asm function
       // Print format similar to LLDB
-      cout << selected_frame.GetModule().GetFileSpec().GetFilename() << "`"
-           << selected_frame.GetFunctionName() << ':' << endl;
-
-      // Offset in the function
-      //  cout<<" +
-      //  "<<selected_frame.GetPCAddress().GetOffset()-selected_frame.GetModule().ResolveSymbolContextForAddress(selected_frame.GetPCAddress(),lldb::eSymbolContextEverything).GetSymbol().GetStartAddress().GetOffset();
+      llvm::outs() << selected_frame.GetModule().GetFileSpec().GetFilename()
+                   << "`" << selected_frame.GetFunctionName() << ':' << '\n';
 
       // Get asm
       string c = selected_frame.Disassemble();
@@ -104,13 +105,13 @@ void PrintSource(lldb::SBProcess proc, lldb::SBStream &str_out) {
       if (idx != string::npos) {
         size_t lines = 4;
         while (lines > 0 && idx < c.size()) {
-          cout << c.c_str()[idx];
+          llvm::outs() << c.c_str()[idx];
           if (c[idx] == '\n') {
             lines--;
           }
           idx++;
         }
-        cout << endl;
+        llvm::outs() << '\n';
       }
     }
   }
@@ -118,13 +119,13 @@ void PrintSource(lldb::SBProcess proc, lldb::SBStream &str_out) {
 
 int main(int argc, char **argv) {
 
-  cl::ParseCommandLineOptions(argc, argv, "temp\n");
+  cl::ParseCommandLineOptions(argc, argv, "lldb-analyze\n");
 
   llvm::outs() << "INPUT: " << TargetFileName.c_str() << '\n';
 
-  lldb::SBDebugger debugger;
-  lldb::SBDebugger::Initialize();
-  debugger = lldb::SBDebugger::Create();
+  ABSDebugger debugger;
+  ABSDebugger::Init();
+  debugger = ABSDebugger::Create();
 
   debugger.SetErrorFileHandle(stderr, false);
   debugger.SetOutputFileHandle(stdout, false);
@@ -134,7 +135,7 @@ int main(int argc, char **argv) {
 
   // Create a target from the provided exe file
   // Exit if the target isn't created
-  lldb::SBTarget target = debugger.CreateTarget(TargetFileName.c_str());
+  ABSTarget target = debugger.CreateTarget(TargetFileName.c_str());
   if (!target.IsValid()) {
     return -1;
   }
@@ -143,7 +144,8 @@ int main(int argc, char **argv) {
   // Set target and a breakpoint for the main function(if it exists)
   debugger.SetSelectedTarget(target);
 
-  target.BreakpointCreateByName("main");
+  // Create a breakpoint at the start of the main function
+  target.CreateBreakpoint("main", nullptr, true);
 
   // Setup support vars for main loop
   uint32_t last_proc_stop_id = 0;
@@ -193,25 +195,16 @@ int main(int argc, char **argv) {
       // entered a command that did not restart the process we do not need to
       // write the source files again If the ids do not match that means that
       // means that this is a new stop and that we need to print the source code
-      if ((cur_stop_id != last_proc_stop_id && ((!Verbose &&
-          !debugger.GetAsync()) || debugger.GetAsync())) || first) {
+      if ((cur_stop_id != last_proc_stop_id &&
+           ((!Verbose && !debugger.GetAsync()) || debugger.GetAsync())) ||
+          first) {
         last_proc_stop_id = cur_stop_id;
-        first=false;
+        first = false;
 
         str_out.Printf("Process %" PRIu64 " stopped\n", proc.GetProcessID());
 
         // My print source
         PrintSource(proc, str_out);
-
-        // Print source using lldb in sync mode
-        // lldb::SBCommandReturnObject result;
-        // bool old_async = debugger.GetAsync();
-        // debugger.SetAsync(false);
-        // string cmd = "process status";
-        // debugger.GetCommandInterpreter().HandleCommand(cmd.c_str(),result);
-        // str_out.Print(result.GetOutput());
-        // str_err.Print(result.GetError());
-        // debugger.SetAsync(old_async);
       }
       // Handle new command
       string buff;
