@@ -2,7 +2,7 @@
 ## Description:
 Runs a basic wrapper for lldb. Sets the provided executable as the target, sets a breakpoint on the main function and starts debugging.
 ## Build:
-  * cmake <other_build_options> -DLLVM_ENABLE_PROJECTS="clang;lldb" <other_build_options>
+  * cmake <other_build_options> -DLLVM_ENABLE_PROJECTS="clang;lldb" -DLLDB_EXPORT_ALL_SYMBOLS=True <other_build_options>
   * ninja lldb
   * If lldb is already built: ninja temp
     
