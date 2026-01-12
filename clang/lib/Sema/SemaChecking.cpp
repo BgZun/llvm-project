@@ -921,11 +921,20 @@ class EstimateSizeFormatHandler
   /// Whether the format string contains Linux kernel's format specifier
   /// extension.
   bool IsKernelCompatible = true;
+  /// The call expression for the print function
+  const CallExpr *PrintCall;
+  /// Current Arg Index
+  size_t curArg;
 
 public:
   EstimateSizeFormatHandler(StringRef Format)
       : Size(std::min(Format.find(0), Format.size()) +
              1 /* null byte always written by sprintf */) {}
+
+  EstimateSizeFormatHandler(StringRef Format, const CallExpr *Call)
+      : Size(std::min(Format.find(0), Format.size()) +
+             1 /* null byte always written by sprintf */),
+        PrintCall(Call) {}
 
   bool HandlePrintfSpecifier(const analyze_printf::PrintfSpecifier &FS,
                              const char *, unsigned SpecifierLen,
@@ -933,6 +942,8 @@ public:
 
     const size_t FieldWidth = computeFieldWidth(FS);
     const size_t Precision = computePrecision(FS);
+    // Next specifier
+    curArg++;
 
     // The actual format.
     switch (FS.getConversionSpecifier().getKind()) {
@@ -994,10 +1005,25 @@ public:
 
     // Just a string.
     case analyze_format_string::ConversionSpecifier::sArg:
-    case analyze_format_string::ConversionSpecifier::SArg:
+    case analyze_format_string::ConversionSpecifier::SArg: {
       Size += FieldWidth;
+      if (FieldWidth != 0)
+        break;
+      const Expr *Arg = PrintCall->getArg(curArg)->IgnoreParenImpCasts();
+      const StringLiteral *ArgString = dyn_cast<StringLiteral>(Arg);
+      const DeclRefExpr *ArgDeclRef = dyn_cast<DeclRefExpr>(Arg);
+      if (ArgString) {
+        Size += ArgString->getLength();
+      } else if (ArgDeclRef) {
+        const auto DeclArg = ArgDeclRef->getDecl();
+        const VarDecl *ArgVarDecl = dyn_cast<VarDecl>(DeclArg);
+        auto const ArgInit = ArgVarDecl->getAnyInitializer();
+        if (const StringLiteral *ArgInitString =
+                dyn_cast<StringLiteral>(ArgInit))
+          Size += ArgInitString->getLength();
+      }
       break;
-
+    }
     // Just a pointer in the form '0xddd'.
     case analyze_format_string::ConversionSpecifier::pArg:
       // Linux kernel has its own extesion for `%p` specifier.
@@ -1063,6 +1089,8 @@ public:
     return true;
   }
 
+  void setCurrentArg(size_t argIdx) { curArg = argIdx; }
+  size_t getCurArgIndex() const { return curArg; }
   size_t getSizeLowerBound() const { return Size; }
   bool isKernelCompatible() const { return IsKernelCompatible; }
 
@@ -1426,7 +1454,9 @@ void Sema::checkFortifiedBuiltinMemoryFunction(FunctionDecl *FD,
     size_t StrLen;
     if (SourceSize &&
         ProcessFormatStringLiteral(FormatExpr, FormatStrRef, StrLen, Context)) {
-      EstimateSizeFormatHandler H(FormatStrRef);
+      EstimateSizeFormatHandler H(FormatStrRef, TheCall);
+      // Set the start of the arguments in the print function
+      H.setCurrentArg(2);
       const char *FormatBytes = FormatStrRef.data();
       if (!analyze_format_string::ParsePrintfString(
               H, FormatBytes, FormatBytes + StrLen, getLangOpts(),
