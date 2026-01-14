@@ -921,9 +921,9 @@ class EstimateSizeFormatHandler
   /// Whether the format string contains Linux kernel's format specifier
   /// extension.
   bool IsKernelCompatible = true;
-  /// The call expression for the print function
+  /// The call expression for the print function.
   const CallExpr *PrintCall;
-  /// Current Arg Index
+  /// Current Arg Index.
   size_t curArg;
 
 public:
@@ -942,7 +942,7 @@ public:
 
     const size_t FieldWidth = computeFieldWidth(FS);
     const size_t Precision = computePrecision(FS);
-    // Next specifier
+    // Next specifier.
     curArg++;
 
     // The actual format.
