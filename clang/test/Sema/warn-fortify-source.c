@@ -124,12 +124,19 @@ void call_snprintf(double d, int n) {
   __builtin_snprintf(buf, 1, "%#o", n); // expected-warning {{'snprintf' will always be truncated; specified size is 1, but format string expands to at least 2}}
   
   char dst[3];
-  char src [] = "1234";
+  const char src [] = "1234";
   __builtin_snprintf(dst, sizeof(dst), "%s", "1234"); // expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 5}}
   __builtin_snprintf(dst, sizeof(dst), "%s", src); // expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 5}}
   __builtin_snprintf(dst, sizeof(dst), "%s %s", "1234", "1234"); // expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 10}}
   __builtin_snprintf(dst, sizeof(dst), "%s %s", "1234", src); // expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 10}}
   __builtin_snprintf(dst, sizeof(dst), "%s %s", src, src); // expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 10}}
+
+  const char* const ConstPtrConstChar = "1234";
+  __builtin_snprintf(dst,sizeof(dst),"%s",ConstPtrConstChar);// expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 5}}
+  
+  const char ConstCharArray[] = "1234";
+  __builtin_snprintf(dst,sizeof(dst),"%s",ConstCharArray);// expected-warning {{'snprintf' will always be truncated; specified size is 3, but format string expands to at least 5}}
+
 }
 
 void call_vsnprintf(void) {

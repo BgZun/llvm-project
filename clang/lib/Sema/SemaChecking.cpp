@@ -1009,19 +1009,61 @@ public:
       Size += FieldWidth;
       if (FieldWidth != 0)
         break;
+      // Check if the curArg is inbounds.
+      if (PrintCall->getNumArgs() < curArg)
+        break;
+
       const Expr *Arg = PrintCall->getArg(curArg)->IgnoreParenImpCasts();
-      const StringLiteral *ArgString = dyn_cast<StringLiteral>(Arg);
       const DeclRefExpr *ArgDeclRef = dyn_cast<DeclRefExpr>(Arg);
-      if (ArgString) {
-        Size += ArgString->getLength();
-      } else if (ArgDeclRef) {
+      // If the Arg is a ref to a decleration check the declaration.
+      if (ArgDeclRef) {
         const auto DeclArg = ArgDeclRef->getDecl();
-        const VarDecl *ArgVarDecl = dyn_cast<VarDecl>(DeclArg);
-        auto const ArgInit = ArgVarDecl->getAnyInitializer();
+        const VarDecl *ArgVarDecl = dyn_cast_or_null<VarDecl>(DeclArg);
+        // If the declaration is not a variable we exit.
+        if (!ArgVarDecl)
+          break;
+
+        // If the Var is a parameter we can't get the size.
+        const ParmVarDecl *Param = dyn_cast_or_null<ParmVarDecl>(ArgVarDecl);
+        if (Param)
+          break;
+
+        // Check if the ptr we are using to access the Var is constant.
+        QualType ArgVarDeclType = ArgVarDecl->getType();
+        const ASTContext &Ctxt = ArgVarDecl->getASTContext();
+        if (!ArgVarDeclType.isConstant(Ctxt))
+          break;
+
+        // Currently only support pointers to consts and const arrays.
+        const PointerType *ArgPtrType =
+            dyn_cast_or_null<PointerType>(ArgVarDeclType);
+        const ConstantArrayType *ArgConstArrayType =
+            dyn_cast_or_null<ConstantArrayType>(ArgVarDeclType);
+        if (ArgPtrType) {
+          const QualType PteeTy = ArgPtrType->getPointeeType();
+          if (!PteeTy.isConstant(Ctxt))
+            break;
+        } else if (!ArgConstArrayType) {
+          break;
+        }
+        // Get initializer and check if it is a literal we can use.
+        const Expr *ArgInit =
+            ArgVarDecl->getAnyInitializer()->IgnoreParenImpCasts();
+
+        if (!ArgInit)
+          break;
+
         if (const StringLiteral *ArgInitString =
                 dyn_cast<StringLiteral>(ArgInit))
           Size += ArgInitString->getLength();
       }
+
+      // If the arg is just a literal just use it's size.
+      const StringLiteral *ArgString = dyn_cast<StringLiteral>(Arg);
+      if (ArgString) {
+        Size += ArgString->getLength();
+      }
+
       break;
     }
     // Just a pointer in the form '0xddd'.

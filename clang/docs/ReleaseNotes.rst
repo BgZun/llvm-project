@@ -513,6 +513,8 @@ Improvements to Clang's diagnostics
 - Clang now generates a fix-it for C++20 designated initializers when the 
   initializers do not match the declaration order in the structure. 
 
+- Clang can now diagnose overflow in format string for printfs when constant strings are used for arguments when '-ftruncation-oveflow'.
+
 Improvements to Clang's time-trace
 ----------------------------------
 
