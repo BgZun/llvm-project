@@ -955,15 +955,37 @@ public:
     // Just an integer.
     case analyze_format_string::ConversionSpecifier::dArg:
     case analyze_format_string::ConversionSpecifier::DArg:
-    case analyze_format_string::ConversionSpecifier::iArg:
-    case analyze_format_string::ConversionSpecifier::oArg:
-    case analyze_format_string::ConversionSpecifier::OArg:
-    case analyze_format_string::ConversionSpecifier::uArg:
-    case analyze_format_string::ConversionSpecifier::UArg:
-    case analyze_format_string::ConversionSpecifier::xArg:
-    case analyze_format_string::ConversionSpecifier::XArg:
-      Size += std::max(FieldWidth, Precision);
+    case analyze_format_string::ConversionSpecifier::iArg: {
+      int SizeLocal = calculateFormatSizeOfIntArg(
+          curArg, PrintCall, 10 /*Radix*/, true /*Signed*/);
+      int SizePrefix = std::max(FieldWidth, Precision);
+      Size += std::max(SizePrefix, SizeLocal);
       break;
+    }
+    case analyze_format_string::ConversionSpecifier::oArg:
+    case analyze_format_string::ConversionSpecifier::OArg: {
+      int SizeLocal = calculateFormatSizeOfIntArg(
+          curArg, PrintCall, 8 /*Radix*/, false /*Signed*/);
+      int SizePrefix = std::max(FieldWidth, Precision);
+      Size += std::max(SizePrefix, SizeLocal);
+      break;
+    }
+    case analyze_format_string::ConversionSpecifier::uArg:
+    case analyze_format_string::ConversionSpecifier::UArg: {
+      int SizeLocal = calculateFormatSizeOfIntArg(
+          curArg, PrintCall, 10 /*Radix*/, false /*Signed*/);
+      int SizePrefix = std::max(FieldWidth, Precision);
+      Size += std::max(SizePrefix, SizeLocal);
+      break;
+    }
+    case analyze_format_string::ConversionSpecifier::xArg:
+    case analyze_format_string::ConversionSpecifier::XArg: {
+      int SizeLocal = calculateFormatSizeOfIntArg(
+          curArg, PrintCall, 16 /*Radix*/, false /*Signed*/);
+      int SizePrefix = std::max(FieldWidth, Precision);
+      Size += std::max(SizePrefix, SizeLocal);
+      break;
+    }
 
     // %g style conversion switches between %f or %e style dynamically.
     // %g removes trailing zeros, and does not print decimal point if there are
@@ -1188,6 +1210,49 @@ private:
       break;
     }
     return Precision;
+  }
+
+  int calculateFormatSizeOfIntArg(const int intLoc, const CallExpr *PrintCall,
+                                  const int Radix = 10, bool Signed = true) {
+    if (PrintCall->getNumArgs() <= intLoc)
+      return 0;
+
+    const Expr *Arg = PrintCall->getArg(intLoc)->IgnoreParenImpCasts();
+    const DeclRefExpr *ArgDeclRefInt = dyn_cast_or_null<DeclRefExpr>(Arg);
+    llvm::APInt val;
+    if (const IntegerLiteral *ArgLitInt =
+            dyn_cast_or_null<IntegerLiteral>(Arg)) {
+      if (ArgLitInt)
+        val = ArgLitInt->getValue();
+    } else if (ArgDeclRefInt) {
+      const Decl *RefDeclArg = ArgDeclRefInt->getDecl();
+      const VarDecl *ArgVarDecl = dyn_cast_or_null<VarDecl>(RefDeclArg);
+      if (!ArgVarDecl)
+        return 0;
+
+      // If the Var is a parameter we can't get the size.
+      const ParmVarDecl *Param = dyn_cast_or_null<ParmVarDecl>(ArgVarDecl);
+      if (Param)
+        return 0;
+
+      const Expr *VarDeclInt = ArgVarDecl->getInit();
+      if (const IntegerLiteral *DeclLitInt =
+              dyn_cast_or_null<IntegerLiteral>(VarDeclInt))
+        val = DeclLitInt->getValue();
+    } else {
+      return 0;
+    }
+
+    if (val.isSingleWord()) {
+      SmallString<64> s;
+      val.toString(s, Radix, Signed);
+      return s.size();
+    } else {
+      SmallString<256> s;
+      val.toString(s, Radix, Signed);
+      return s.size();
+    }
+    return 0;
   }
 };
 
